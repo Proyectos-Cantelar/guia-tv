@@ -23,12 +23,18 @@ propia línea y atenúa los días de los que no hay datos a la hora seleccionada
 ### Instalación
 
 Abre **<https://proyectos-cantelar.github.io/guia-tv/>** y arrastra el botón a la
-barra de marcadores. Luego, en cualquier página de tvguia.es, púlsalo.
+barra de marcadores. **Sustituye con él tu marcador de tvguia.es**: es un 2x1.
 
-El marcador es un **cargador**: no lleva el código dentro, sino que inyecta
-`tvguia-mas-dias.js` desde GitHub Pages con `?t=Date.now()` para saltarse la caché.
-Por eso **siempre ejecuta la última versión publicada** y no hay que reinstalarlo
-cuando cambiemos el script.
+- Si ya estás en tvguia.es, lo pulsas y aparece la parrilla ampliada.
+- Si estás en otra página, te lleva a la parrilla de tvguia.es; púlsalo otra vez.
+
+Ese segundo clic es inevitable: un marcador no puede ejecutar código en la página
+siguiente (seguridad del navegador). Aun así son los mismos clics que antes y un
+marcador menos. Para cero clics, usa el userscript de más abajo.
+
+El marcador no lleva el código dentro, sino que inyecta `tvguia-mas-dias.js` desde
+GitHub Pages con `?t=Date.now()` para saltarse la caché. Por eso **siempre ejecuta
+la última versión publicada** y no hay que reinstalarlo cuando cambiemos el script.
 
 ### Compilar en local
 
@@ -44,8 +50,8 @@ Genera `public/` (está en `.gitignore`, lo produce el CI):
 |---|---|
 | `index.html` | página de instalación con el enlace que se arrastra |
 | `tvguia-mas-dias.js` | el script que descarga el marcador |
-| `bookmarklet.txt` | el marcador cargador (siempre última versión) |
-| `bookmarklet-inline.txt` | marcador autocontenido, congelado en esta versión |
+| `bookmarklet.txt` | el marcador 2x1 (te lleva a la parrilla y la amplía) |
+| `bookmarklet-inline.txt` | igual pero con el código dentro, congelado en esta versión |
 
 ### Despliegue
 

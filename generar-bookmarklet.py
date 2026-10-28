@@ -4,8 +4,10 @@
 Toma `tvguia-mas-dias.user.js` como única fuente de verdad y escribe en `public/`:
 
   tvguia-mas-dias.js       el script servido (sin la cabecera de userscript)
-  bookmarklet.txt          el marcador "cargador": descarga siempre la última versión
-  bookmarklet-inline.txt   el marcador autocontenido (no se actualiza solo)
+  bookmarklet.txt          el marcador de acceso: lleva a la parrilla de tvguia.es
+                           y, si ya estás allí, aplica el parche (descarga siempre
+                           la última versión publicada)
+  bookmarklet-inline.txt   igual, pero con el código dentro (no se actualiza solo)
   index.html               página de instalación con el enlace que se arrastra
 
 Uso:
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import os
 import re
 import subprocess
@@ -34,6 +37,10 @@ SALIDA = AQUI / "public"
 NOMBRE = "TVguia +días"
 NOMBRE_SCRIPT = "tvguia-mas-dias.js"
 REPO_POR_DEFECTO = "Proyectos-Cantelar/guia-tv"
+
+URL_PARRILLA = "https://www.tvguia.es/programacion-tv/programacion-tv"
+# Con esto sabemos si la página actual ya es una parrilla (parcheada o no).
+SELECTOR_PARRILLA = "#button-today,#ajax-here,.tv-program-listing-block"
 
 
 # --------------------------------------------------------------------------- #
@@ -92,20 +99,44 @@ def url_de_pages(repo: str) -> str:
 # --------------------------------------------------------------------------- #
 # Piezas publicadas
 # --------------------------------------------------------------------------- #
-def codigo_cargador(url_script: str) -> str:
-    """Marcador diminuto que inyecta el script desde GitHub Pages.
+def codigo_acceso(url_script: str) -> str:
+    """Marcador 2x1: te lleva a la parrilla y allí inyecta el script.
 
-    Se le añade un parámetro con la hora para saltarse la caché de Pages (~10 min),
-    así el marcador instalado no hay que tocarlo nunca más.
+    Si la página actual no es una parrilla de tvguia.es, navega y ya está: la
+    segunda pulsación (o el usuario, si ya estaba dentro) aplica el parche. No se
+    puede parchear la página siguiente desde la actual, es cosa del navegador.
+
+    El `?t=Date.now()` se salta la caché de Pages (~10 min), así el marcador
+    instalado no hay que tocarlo nunca más.
     """
-    return (
-        "(function(){"
+    return inicio_salida() + (
         "var s=document.createElement('script');"
-        f"s.src={url_script!r}+'?t='+Date.now();"
+        f"s.src={js_str(url_script)}+'?t='+Date.now();"
         "s.onerror=function(){console.error('[guia-tv] no se pudo cargar el script');};"
         "(document.body||document.documentElement).appendChild(s);"
         "})();"
     )
+
+
+def codigo_inline(payload: str) -> str:
+    """Igual que `codigo_acceso`, pero con el código pegado dentro."""
+    return inicio_salida() + payload + "\n})();"
+
+
+def inicio_salida() -> str:
+    """Arranca la IIFE y, si no estamos en una parrilla de tvguia.es, navega allí."""
+    return (
+        "(function(){"
+        f"var t={js_str(URL_PARRILLA)};"
+        "if(!/(^|\\.)tvguia\\.es$/.test(location.hostname)"
+        f"||!document.querySelector({js_str(SELECTOR_PARRILLA)}))"
+        "{location.href=t;return;}"
+    )
+
+
+def js_str(valor: str) -> str:
+    """Literal de cadena de JavaScript."""
+    return json.dumps(valor, ensure_ascii=False)
 
 
 PLANTILLA = """<!doctype html>
@@ -130,20 +161,26 @@ PLANTILLA = """<!doctype html>
   summary{cursor:pointer;font-weight:600}
 </style>
 <h1>@@TITULO@@</h1>
-<p class="sub">Más días en la parrilla de tvguia.es.</p>
+<p class="sub">Un solo marcador para tvguia.es: te lleva a la parrilla y le añade los días que faltan.</p>
 
-<p>Arrastra este enlace a la barra de marcadores:</p>
+<p>Sustituye tu marcador de tvguia.es por este, arrastrándolo a la barra:</p>
 <p><a class="btn" href="@@CARGADOR@@">@@NOMBRE@@</a></p>
-<p>Luego entra en <a href="https://www.tvguia.es/programacion-tv/programacion-tv">tvguia.es</a>
-y pulsa el marcador. El marcador descarga
+
+<h2>Cómo se usa</h2>
+<ul>
+  <li>Si ya estás en tvguia.es, lo pulsas y aparece la parrilla con 10 días atrás y 3 adelante.</li>
+  <li>Si estás en otra página, te lleva a la parrilla; púlsalo otra vez y ya está.</li>
+</ul>
+
+<p>El marcador no lleva el código dentro: descarga
 <a href="@@SCRIPT@@">@@SCRIPT@@</a> de esta misma página con un parámetro
-antiguo de caché, así que <strong>siempre ejecuta la última versión</strong>: si el
-script cambia, no tienes que volver a instalarlo.</p>
+anticaché, así que <strong>siempre ejecuta la última versión</strong>. Si el script
+cambia, no tienes que reinstalar nada.</p>
 
 <h2>Qué hace</h2>
 <ul>
   <li>Sustituye la fila de días original (que solo llega a 2 días atrás) por una
-      fila ordenada de 14 botones: 10 días atrás y 3 adelante.</li>
+      fila ordenada de 14 botones.</li>
   <li>Deja la fila de horas en su propia línea.</li>
   <li>Atenúa los días de los que no hay datos a la hora seleccionada.</li>
 </ul>
@@ -180,12 +217,12 @@ def main() -> None:
 
     codigo = minifica(FUENTE.read_text(encoding="utf-8"))
     url_script = base + NOMBRE_SCRIPT
-    cargador = a_bookmarklet(codigo_cargador(url_script))
-    inline = a_bookmarklet(codigo)
+    acceso = a_bookmarklet(codigo_acceso(url_script))
+    inline = a_bookmarklet(codigo_inline(codigo))
 
     SALIDA.mkdir(exist_ok=True)
     (SALIDA / NOMBRE_SCRIPT).write_text(sin_cabecera(FUENTE.read_text(encoding="utf-8")), encoding="utf-8")
-    (SALIDA / "bookmarklet.txt").write_text(cargador + "\n", encoding="utf-8")
+    (SALIDA / "bookmarklet.txt").write_text(acceso + "\n", encoding="utf-8")
     (SALIDA / "bookmarklet-inline.txt").write_text(inline + "\n", encoding="utf-8")
 
     pagina = PLANTILLA
@@ -195,8 +232,8 @@ def main() -> None:
         "@@SCRIPT@@": NOMBRE_SCRIPT,
         "@@FUENTE@@": FUENTE.name,
         "@@FECHA@@": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "@@CARGADOR_TXT@@": html.escape(cargador),
-        "@@CARGADOR@@": html.escape(cargador, quote=True),
+        "@@CARGADOR_TXT@@": html.escape(acceso),
+        "@@CARGADOR@@": html.escape(acceso, quote=True),
         "@@INLINE@@": html.escape(inline, quote=True),
     }.items():
         pagina = pagina.replace(token, valor)
@@ -205,7 +242,7 @@ def main() -> None:
     print(f"repo        : {repo}")
     print(f"pages       : {base}")
     print(f"código      : {len(codigo)} caracteres")
-    print(f"cargador    : {len(cargador)} caracteres")
+    print(f"marcador    : {len(acceso)} caracteres")
     print(f"inline      : {len(inline)} caracteres")
     print(f"salida      : {SALIDA}/ (index.html, {NOMBRE_SCRIPT}, bookmarklet.txt, bookmarklet-inline.txt)")
 
