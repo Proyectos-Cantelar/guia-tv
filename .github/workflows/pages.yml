@@ -1,0 +1,55 @@
+name: Publicar en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generar public/
+        run: python3 generar-bookmarklet.py --repo "${{ github.repository }}"
+
+      - name: Comprobar el JavaScript servido
+        run: node --check "public/tvguia-mas-dias.js"
+
+      - name: Comprobar que los marcadores son JS válido
+        run: |
+          for f in bookmarklet.txt bookmarklet-inline.txt; do
+            node -e "const fs=require('fs');const u=fs.readFileSync('public/$f','utf8').trim();new Function(decodeURIComponent(u.slice(11)));console.log('$f ->', u.length, 'caracteres')"
+          done
+
+      - name: Subir artefacto
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Desplegar
+        id: deploy
+        uses: actions/deploy-pages@v4

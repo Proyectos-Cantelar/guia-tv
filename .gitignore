@@ -1,0 +1,6 @@
+# Artefactos que genera el CI
+public/
+
+# Python
+__pycache__/
+*.py[cod]
